@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Fixed Audio Sync Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Orbitron:wght@700&display=swap');
+
+        :root {
+            --brand-red: #ff0000;
+        }
+
+        body {
+            background-color: #000;
+            color: var(--brand-red);
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Orbitron', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            touch-action: manipulation;
+            padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+        }
+
+        .main-touch-area {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .timer-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 0 10vw;
+            box-sizing: border-box;
+            pointer-events: none;
+        }
+
+        #status-indicator {
+            font-size: clamp(1rem, 4vw, 2.5rem);
+            margin-bottom: 2vh;
+            color: var(--brand-red);
+            letter-spacing: 0.5rem;
+            height: 1.5em;
+            text-align: center;
+        }
+
+        .digit-wrapper {
+            display: inline-grid;
+            grid-template-columns: repeat(5, 1fr);
+            justify-items: center;
+            align-items: center;
+            font-family: 'JetBrains Mono', 'Courier New', monospace;
+            font-size: min(28vw, 50vh);
+            line-height: 1;
+            width: 4.5ch; 
+            text-align: center;
+        }
+
+        #timer-display span {
+            display: inline-block;
+            width: 1ch;
+            text-align: center;
+        }
+
+        .controls-container {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 15, 15, 0.98);
+            padding: 15px 20px calc(20px + env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            border-top: 1px solid #333;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 100;
+        }
+
+        .controls-hidden {
+            transform: translateY(100%);
+        }
+
+        .settings-grid {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .input-group label {
+            font-size: 11px;
+            color: #666;
+            letter-spacing: 1px;
+        }
+
+        input[type="number"] {
+            background: #111;
+            color: var(--brand-red);
+            border: 1px solid #444;
+            border-radius: 6px;
+            width: 55px;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            padding: 8px 0;
+            font-size: 18px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 13px;
+            border: none;
+        }
+
+        .btn-start { background: var(--brand-red); color: #000; }
+        .btn-stop { background: #333; color: #fff; }
+        .btn-reset { border: 1px solid #444; color: #888; background: transparent; }
+        .btn-close { background: #222; color: #666; max-width: 80px; }
+        
+        .btn:active { transform: scale(0.96); }
+        .btn:disabled { opacity: 0.2; }
+
+        .handle {
+            width: 36px;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            margin-top: -5px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="main-touch-area" onclick="handleBackgroundClick()">
+    <div class="timer-container">
+        <div id="status-indicator">READY</div>
+        <div id="timer-display" class="digit-wrapper">
+            <span>0</span><span>0</span><span>:</span><span>0</span><span>0</span>
+        </div>
+    </div>
+</div>
+
+<div id="controls-panel" class="controls-container">
+    <div class="handle"></div>
+    
+    <div class="settings-grid">
+        <div class="input-group">
+            <label>TIMER A</label>
+            <div class="flex items-center gap-1">
+                <input type="number" id="min-a" value="5" min="0">
+                <span>:</span>
+                <input type="number" id="sec-a" value="0" min="0" max="59">
+            </div>
+        </div>
+        <div class="input-group">
+            <label>TIMER B</label>
+            <div class="flex items-center gap-1">
+                <input type="number" id="min-b" value="0" min="0">
+                <span>:</span>
+                <input type="number" id="sec-b" value="15" min="0" max="59">
+            </div>
+        </div>
+    </div>
+    
+    <div class="btn-group">
+        <button id="start-btn" class="btn btn-start">START</button>
+        <button id="stop-btn" class="btn btn-stop" disabled>STOP</button>
+        <button id="reset-btn" class="btn btn-reset">RESET</button>
+        <button id="close-btn" class="btn btn-close" onclick="hideControls()">CLOSE</button>
+    </div>
+</div>
+
+<script>
+    let timeLeft;
+    let timerId = null;
+    let isRunning = false;
+    let audioCtx = null;
+    let currentMode = 'A'; 
+
+    const display = document.getElementById('timer-display');
+    const status = document.getElementById('status-indicator');
+    const panel = document.getElementById('controls-panel');
+    const startBtn = document.getElementById('start-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const resetBtn = document.getElementById('reset-btn');
+
+    const inputs = {
+        a: { min: document.getElementById('min-a'), sec: document.getElementById('sec-a') },
+        b: { min: document.getElementById('min-b'), sec: document.getElementById('sec-b') }
+    };
+
+    function initAudio() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playBeep(freq, dur, vol) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+    }
+
+    function updateDisplay() {
+        const m = Math.floor(Math.max(0, timeLeft) / 60);
+        const s = Math.max(0, timeLeft) % 60;
+        const timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        
+        display.innerHTML = '';
+        [...timeStr].forEach(char => {
+            const span = document.createElement('span');
+            span.textContent = char;
+            display.appendChild(span);
+        });
+    }
+
+    function setTimerFromInput(mode) {
+        const m = parseInt(inputs[mode.toLowerCase()].min.value) || 0;
+        const s = parseInt(inputs[mode.toLowerCase()].sec.value) || 0;
+        timeLeft = m * 60 + s;
+        status.textContent = `TIMER ${mode}`;
+        updateDisplay();
+    }
+
+    function showControls() {
+        panel.classList.remove('controls-hidden');
+    }
+
+    function hideControls() {
+        if (isRunning) {
+            panel.classList.add('controls-hidden');
+        }
+    }
+
+    function handleBackgroundClick() {
+        if (!isRunning) return; 
+        
+        if (panel.classList.contains('controls-hidden')) {
+            showControls();
+        } else {
+            hideControls();
+        }
+    }
+
+    function tick() {
+        // 先に時間を減らす
+        timeLeft--;
+
+        // 表示を更新
+        updateDisplay();
+
+        // 減らした後の時間 timeLeft が 5, 4, 3, 2, 1 の時に「ピ」を鳴らす
+        // これにより、画面が 05, 04, 03, 02, 01 になった瞬間に音が鳴ります
+        if (timeLeft <= 5 && timeLeft >= 1) {
+            playBeep(660, 0.08, 0.7); 
+        }
+
+        // 0になった瞬間に終了音を鳴らして切り替える
+        if (timeLeft <= 0) {
+            playBeep(660, 1.2, 0.8); 
+            
+            // モード切り替え
+            currentMode = (currentMode === 'A') ? 'B' : 'A';
+            const m = parseInt(inputs[currentMode.toLowerCase()].min.value) || 0;
+            const s = parseInt(inputs[currentMode.toLowerCase()].sec.value) || 0;
+            timeLeft = m * 60 + s;
+            
+            status.textContent = `TIMER ${currentMode}`;
+            updateDisplay();
+        }
+    }
+
+    function startTimer() {
+        initAudio();
+        if (isRunning) return;
+        
+        // 初回スタート時またはリセット後の設定
+        if (timerId === null) {
+            currentMode = 'A';
+            setTimerFromInput('A');
+            // Aが0ならBを試す
+            if (timeLeft <= 0) {
+                currentMode = 'B';
+                setTimerFromInput('B');
+            }
+            if (timeLeft <= 0) return;
+        }
+
+        isRunning = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        
+        setTimeout(hideControls, 400);
+        
+        // 最初の tick を開始
+        timerId = setInterval(tick, 1000);
+    }
+
+    function stopTimer() {
+        clearInterval(timerId);
+        timerId = null; // nullに戻すことで、再開時に tick が正しく動くようにする
+        isRunning = false;
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        showControls();
+    }
+
+    function resetTimer() {
+        stopTimer();
+        currentMode = 'A';
+        setTimerFromInput('A');
+        status.textContent = 'READY';
+    }
+
+    startBtn.addEventListener('click', (e) => { e.stopPropagation(); startTimer(); });
+    stopBtn.addEventListener('click', (e) => { e.stopPropagation(); stopTimer(); });
+    resetBtn.addEventListener('click', (e) => { e.stopPropagation(); resetTimer(); });
+
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    Object.values(inputs).forEach(set => {
+        [set.min, set.sec].forEach(el => {
+            el.addEventListener('input', () => { if (!isRunning) setTimerFromInput('A'); });
+        });
+    });
+
+    setTimerFromInput('A');
+    status.textContent = 'READY';
+</script>
+
+</body>
+</html>
+
